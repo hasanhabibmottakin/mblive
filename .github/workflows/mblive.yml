@@ -1,0 +1,77 @@
+name: Update API JSON
+
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write  
+
+jobs:
+  update-json:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Create transformed JSON
+        env:
+          SOURCE_URL: ${{ secrets.SOURCE_API_URL }}
+        run: |
+          php -r '
+          $src = getenv("SOURCE_URL");
+          $outFile = "api.json";
+          $ch = curl_init($src);
+          curl_setopt_array($ch, [
+              CURLOPT_RETURNTRANSFER => true,
+              CURLOPT_FOLLOWLOCATION => true,
+              CURLOPT_TIMEOUT => 15,
+              CURLOPT_USERAGENT => "Mozilla/5.0 (compatible; TransformScript/1.0)"
+          ]);
+          $response = curl_exec($ch);
+          $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+          curl_close($ch);
+          if ($response === false || $httpCode >= 400) {
+              echo "Failed to fetch source JSON\n";
+              exit(1);
+          }
+          $orig = json_decode($response, true);
+          if ($orig === null) {
+              echo "Invalid JSON from source\n";
+              exit(1);
+          }
+          $out = [];
+          foreach ($orig as $outerKey => $channel) {
+              if (!is_array($channel)) continue;
+              $origId = isset($channel["id"]) && $channel["id"] !== "" ? $channel["id"] : $outerKey;
+              $md5id = md5($origId);
+              $new = $channel;
+              $new["id"] = $md5id;
+              if (isset($new["m3u8"])) {
+                  $new["playbackURL"] = $new["m3u8"];
+                  unset($new["m3u8"]);
+              }
+              if (!isset($new["playbackURL"]) && isset($new["url"])) {
+                  $new["playbackURL"] = $new["url"];
+              }
+              $out[$md5id] = $new;
+          }
+          file_put_contents($outFile, json_encode($out, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+          echo "api.json updated successfully\n";
+          '
+
+      - name: Commit and push api.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add api.json
+          git commit -m "Auto-update api.json"
+          git push origin HEAD
