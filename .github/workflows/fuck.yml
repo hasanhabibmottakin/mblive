@@ -2,7 +2,7 @@ name: Update Fuck2 JSON
 
 on:
   schedule:
-    - cron: "0 */4 * * *"  
+    - cron: "0 */4 * * *"   # প্রতি ৪ ঘণ্টা পর পর চলবে
   workflow_dispatch:
 
 permissions:
@@ -29,39 +29,54 @@ jobs:
           TOKEN_API: ${{ secrets.TOKEN_API }}
         run: |
           python <<'PY'
-          import json, re, requests, sys
+          import json, re, requests, sys, os
 
-          # === Load source json ===
+          print("=== Starting token update ===")
+
+          # Debug info
+          print("Working dir:", os.getcwd())
+          print("Files:", os.listdir("."))
+
+          # --- Load source JSON ---
           try:
               with open("fuck.json", "r") as f:
                   data = json.load(f)
+              print("✅ Loaded fuck.json successfully")
           except Exception as e:
-              sys.exit(f"")
+              print("❌ Error reading fuck.json:", e)
+              sys.exit(1)
 
-          # === Get M3U token file ===
-          m3u_url = "${TOKEN_API}"
+          # --- Fetch M3U file ---
+          m3u_url = os.getenv("TOKEN_API")
+          print("Fetching:", m3u_url)
           try:
-              m3u_text = requests.get(m3u_url, timeout=15).text
+              resp = requests.get(m3u_url, timeout=20)
+              print("Status Code:", resp.status_code)
+              m3u_text = resp.text
           except Exception as e:
-              sys.exit(f"")
+              print("❌ Failed to fetch M3U:", e)
+              sys.exit(1)
 
-          # === Extract cookie value for tvg-id="1373" ===
+          # --- Try to extract cookie for tvg-id="1373" ---
           match = re.search(r'tvg-id="1373".*?#EXTHTTP:\{"cookie":"([^"]+)"\}', m3u_text, re.S)
           if not match:
-              sys.exit("")
+              print("❌ Cookie not found for tvg-id=1373")
+              # Optional: print small portion of text for debugging
+              print(m3u_text[:500])
+              sys.exit(1)
           cookie_val = match.group(1)
-          print(f"")
+          print("✅ Cookie extracted:", cookie_val)
 
-          # === Update playbackURL in JSON ===
+          # --- Update playbackURL ---
           for k, v in data.items():
               if "playbackURL" in v:
                   base = v["playbackURL"].split("?")[0]
-                  v["playbackURL"] = f"{base}?{cookie_val}"
+                  v["playbackURL"] = f"{base}?{cookie_val}&xxx=%7Ccookie={cookie_val}"
 
-          # === Save new file ===
+          # --- Save new JSON ---
           with open("fuck2.json", "w") as f:
               json.dump(data, f, indent=4)
-          print("")
+          print("✅ fuck2.json created successfully")
 
           PY
 
