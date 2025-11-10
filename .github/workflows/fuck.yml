@@ -2,7 +2,7 @@ name: Update Fuck2 JSON
 
 on:
   schedule:
-    - cron: "0 */4 * * *"   # প্রতি ৪ ঘণ্টা পর পর চলবে
+    - cron: "0 */4 * * *"   
   workflow_dispatch:
 
 permissions:
@@ -41,12 +41,12 @@ jobs:
           try:
               with open("fuck.json", "r") as f:
                   data = json.load(f)
-              print("✅ Loaded fuck.json successfully")
+              print("Loaded fuck.json successfully")
           except Exception as e:
-              print("❌ Error reading fuck.json:", e)
+              print("Error reading fuck.json:", e)
               sys.exit(1)
 
-          # --- Fetch M3U file ---
+         
           m3u_url = os.getenv("TOKEN_API")
           print("Fetching:", m3u_url)
           try:
@@ -54,29 +54,29 @@ jobs:
               print("Status Code:", resp.status_code)
               m3u_text = resp.text
           except Exception as e:
-              print("❌ Failed to fetch M3U:", e)
+              print("Failed to fetch M3U:", e)
               sys.exit(1)
 
-          # --- Try to extract cookie for tvg-id="1373" ---
+          
           match = re.search(r'tvg-id="1373".*?#EXTHTTP:\{"cookie":"([^"]+)"\}', m3u_text, re.S)
           if not match:
-              print("❌ Cookie not found for tvg-id=1373")
+              print("Cookie not found for tvg-id=1373")
               # Optional: print small portion of text for debugging
               print(m3u_text[:500])
               sys.exit(1)
           cookie_val = match.group(1)
-          print("✅ Cookie extracted:", cookie_val)
+          print("Cookie extracted:", cookie_val)
 
           # --- Update playbackURL ---
           for k, v in data.items():
               if "playbackURL" in v:
                   base = v["playbackURL"].split("?")[0]
-                  v["playbackURL"] = f"{base}?{cookie_val}&xxx=%7Ccookie={cookie_val}"
+                  v["playbackURL"] = f"{base}?{cookie_val}"
 
-          # --- Save new JSON ---
+        
           with open("fuck2.json", "w") as f:
               json.dump(data, f, indent=4)
-          print("✅ fuck2.json created successfully")
+          print("fuck2.json created successfully")
 
           PY
 
