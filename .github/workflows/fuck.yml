@@ -2,8 +2,8 @@ name: Update Fuck2 JSON
 
 on:
   schedule:
-    - cron: "0 */4 * * *"   
-  workflow_dispatch:        
+    - cron: "0 */4 * * *"  
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,34 +26,44 @@ jobs:
 
       - name: Run token updater
         env:
-          TOKEN_API: ${{ secrets.TOKEN_API }}   
+          TOKEN_API: ${{ secrets.TOKEN_API }}
         run: |
-          import json, re, requests
+          python <<'PY'
+          import json, re, requests, sys
 
           # === Load source json ===
-          with open("fuck.json", "r") as f:
-              data = json.load(f)
+          try:
+              with open("fuck.json", "r") as f:
+                  data = json.load(f)
+          except Exception as e:
+              sys.exit(f"")
 
-         
+          # === Get M3U token file ===
           m3u_url = "${TOKEN_API}"
-          m3u_text = requests.get(m3u_url).text
+          try:
+              m3u_text = requests.get(m3u_url, timeout=15).text
+          except Exception as e:
+              sys.exit(f"")
 
-          
-          block = re.search(r'tvg-id="1373".*?#EXTHTTP:\{"cookie":"([^"]+)"\}', m3u_text, re.S)
-          if block:
-              cookie_val = block.group(1)
-          else:
-              raise SystemExit("")
+          # === Extract cookie value for tvg-id="1373" ===
+          match = re.search(r'tvg-id="1373".*?#EXTHTTP:\{"cookie":"([^"]+)"\}', m3u_text, re.S)
+          if not match:
+              sys.exit("")
+          cookie_val = match.group(1)
+          print(f"")
 
-          # === Append token to playbackURL ===
-          for k,v in data.items():
+          # === Update playbackURL in JSON ===
+          for k, v in data.items():
               if "playbackURL" in v:
                   base = v["playbackURL"].split("?")[0]
                   v["playbackURL"] = f"{base}?{cookie_val}"
 
-          # === Save new json ===
+          # === Save new file ===
           with open("fuck2.json", "w") as f:
               json.dump(data, f, indent=4)
+          print("")
+
+          PY
 
       - name: Commit and push changes
         run: |
